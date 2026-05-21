@@ -34,9 +34,10 @@ cp scripts/wait_for_ready.sh "$STAGE/scripts/"
 cp scripts/smoke_test.sh "$STAGE/scripts/"
 chmod +x "$STAGE/scripts/"*.sh
 
-# Source code (no tests, no __pycache__)
+# Source code (no tests, no __pycache__, no egg-info)
 cp -R src "$STAGE/"
 find "$STAGE/src" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find "$STAGE/src" -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 find "$STAGE/src" -name "*.pyc" -delete 2>/dev/null || true
 find "$STAGE/src" -name "*.pyo" -delete 2>/dev/null || true
 
