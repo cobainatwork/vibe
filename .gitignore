@@ -14,3 +14,10 @@ current_model/*
 !current_model/.gitkeep
 vibevoice_src/
 .cache/
+
+# macOS / editors
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
