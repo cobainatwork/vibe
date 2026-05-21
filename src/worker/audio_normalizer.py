@@ -6,15 +6,13 @@ from pathlib import Path
 
 from shared.validation import VIDEO_EXTS
 
-VIDEO_EXT_SET = VIDEO_EXTS  # alias
-
 
 class DecodingError(Exception):
     pass
 
 
 def is_video_file(filename: str) -> bool:
-    return Path(filename).suffix.lower() in VIDEO_EXT_SET
+    return Path(filename).suffix.lower() in VIDEO_EXTS
 
 
 def probe_duration_sec(path: Path) -> float:

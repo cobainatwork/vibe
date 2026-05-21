@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 from pathlib import Path
 
 import redis
@@ -104,9 +105,9 @@ def transcribe_job(job_id: str, *, fake_scenario: str | None = None) -> None:
 
     # Step 4: merge hotwords
     group_ids = [int(x) for x in parse_csv(job.hotword_group_ids_csv)]
-    group_words = [get_group_words(conn, [gid]) for gid in group_ids]
+    all_group_words = get_group_words(conn, group_ids)
     per_request = parse_csv(job.hotwords_csv)
-    merged_words = merge_hotwords(group_words, per_request, max_words=MAX_HOTWORDS)
+    merged_words = merge_hotwords([all_group_words], per_request, max_words=MAX_HOTWORDS)
     hotwords_csv = ",".join(merged_words)
 
     # Step 5: call vLLM with retry-on-loop
@@ -142,8 +143,7 @@ def transcribe_job(job_id: str, *, fake_scenario: str | None = None) -> None:
                 if not ev.content:
                     continue
                 new_text += ev.content
-                detector.text = accumulated + new_text
-                is_loop, good_end = detector._check_repetition()
+                is_loop, good_end = detector.add_text(ev.content)
                 if is_loop:
                     accumulated = (accumulated + new_text)[:good_end]
                     detector.reset(accumulated)
@@ -195,5 +195,4 @@ def transcribe_job(job_id: str, *, fake_scenario: str | None = None) -> None:
 
     # Cleanup uploads (privacy)
     if cfg.retain_upload_days == 0:
-        import shutil
         shutil.rmtree(job_upload_dir, ignore_errors=True)

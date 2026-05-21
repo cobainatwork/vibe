@@ -6,6 +6,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from shared.error_codes import (
+    AUDIO_DURATION_OUT_OF_RANGE,
+    FILE_TOO_LARGE,
+    UNSUPPORTED_FORMAT,
+)
+
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus"}
 VIDEO_EXTS = {".mp4", ".m4v", ".mov", ".webm", ".avi", ".mkv"}
 
@@ -23,8 +29,6 @@ class ValidationError(Exception):
 
 def check_filename_ext(filename: str) -> tuple[str, str]:
     """Return (kind, ext) where kind in {'audio','video'}; raise on bad ext."""
-    from shared.error_codes import UNSUPPORTED_FORMAT
-
     ext = Path(filename).suffix.lower()
     if not ext:
         raise ValidationError(UNSUPPORTED_FORMAT, f"no extension in {filename!r}")
@@ -36,14 +40,12 @@ def check_filename_ext(filename: str) -> tuple[str, str]:
 
 
 def check_file_size_mb(size_mb: float, *, max_mb: int) -> None:
-    from shared.error_codes import FILE_TOO_LARGE
     if size_mb > max_mb:
         raise ValidationError(FILE_TOO_LARGE,
                               f"{size_mb:.1f}MB exceeds limit {max_mb}MB")
 
 
 def check_audio_duration_sec(seconds: float) -> None:
-    from shared.error_codes import AUDIO_DURATION_OUT_OF_RANGE
     if seconds < MIN_DURATION_SEC:
         raise ValidationError(AUDIO_DURATION_OUT_OF_RANGE,
                               f"{seconds:.2f}s shorter than {MIN_DURATION_SEC}s")

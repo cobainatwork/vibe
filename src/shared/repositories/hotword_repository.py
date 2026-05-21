@@ -1,13 +1,10 @@
 """CRUD for hotword_groups table."""
 from __future__ import annotations
 
-import datetime as dt
 import sqlite3
 from dataclasses import dataclass
 
-
-def _now() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat()
+from shared.db import utc_now_iso
 
 
 class DuplicateNameError(Exception):
@@ -26,6 +23,14 @@ class HotwordGroup:
     created_at: str
     updated_at: str
 
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "HotwordGroup":
+        return cls(
+            id=row["id"], name=row["name"],
+            words=_deserialize_words(row["words_csv"]),
+            created_at=row["created_at"], updated_at=row["updated_at"],
+        )
+
 
 def _serialize_words(words: list[str]) -> str:
     for w in words:
@@ -42,7 +47,7 @@ def _deserialize_words(csv: str) -> list[str]:
 
 def create_group(conn: sqlite3.Connection, *, name: str, words: list[str]) -> int:
     words_csv = _serialize_words(words)
-    now = _now()
+    now = utc_now_iso()
     try:
         cur = conn.execute(
             "INSERT INTO hotword_groups (name, words_csv, created_at, updated_at) VALUES (?, ?, ?, ?)",
@@ -62,11 +67,7 @@ def get_group(conn: sqlite3.Connection, group_id: int) -> HotwordGroup | None:
     ).fetchone()
     if not row:
         return None
-    return HotwordGroup(
-        id=row["id"], name=row["name"],
-        words=_deserialize_words(row["words_csv"]),
-        created_at=row["created_at"], updated_at=row["updated_at"],
-    )
+    return HotwordGroup.from_row(row)
 
 
 def get_group_words(conn: sqlite3.Connection, group_ids: list[int]) -> list[str]:
@@ -85,14 +86,7 @@ def get_group_words(conn: sqlite3.Connection, group_ids: list[int]) -> list[str]
 
 def list_groups(conn: sqlite3.Connection) -> list[HotwordGroup]:
     rows = conn.execute("SELECT * FROM hotword_groups ORDER BY name").fetchall()
-    return [
-        HotwordGroup(
-            id=r["id"], name=r["name"],
-            words=_deserialize_words(r["words_csv"]),
-            created_at=r["created_at"], updated_at=r["updated_at"],
-        )
-        for r in rows
-    ]
+    return [HotwordGroup.from_row(r) for r in rows]
 
 
 def update_group(conn: sqlite3.Connection, group_id: int, *,
@@ -105,7 +99,7 @@ def update_group(conn: sqlite3.Connection, group_id: int, *,
     try:
         conn.execute(
             "UPDATE hotword_groups SET name=?, words_csv=?, updated_at=? WHERE id=?",
-            (new_name, _serialize_words(new_words), _now(), group_id),
+            (new_name, _serialize_words(new_words), utc_now_iso(), group_id),
         )
         conn.commit()
     except sqlite3.IntegrityError as e:

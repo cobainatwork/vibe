@@ -5,9 +5,7 @@ import datetime as dt
 import sqlite3
 from dataclasses import dataclass
 
-
-def _now() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat()
+from shared.db import utc_now_iso
 
 
 @dataclass
@@ -48,13 +46,13 @@ def create_job(
         VALUES (?, 'queued', ?, ?, ?, ?, ?)
         """,
         (job_id, filename, hotwords_csv, hotword_group_ids_csv,
-         output_format, _now()),
+         output_format, utc_now_iso()),
     )
     conn.commit()
 
 
 def update_status(conn: sqlite3.Connection, job_id: str, status: str) -> None:
-    now = _now()
+    now = utc_now_iso()
     if status == "running":
         conn.execute("UPDATE jobs SET status=?, started_at=? WHERE id=?",
                      (status, now, job_id))
@@ -85,7 +83,7 @@ def set_error(conn: sqlite3.Connection, job_id: str,
               *, code: str, detail: str) -> None:
     conn.execute(
         "UPDATE jobs SET status='failed', error_code=?, error_detail=?, finished_at=? WHERE id=?",
-        (code, detail, _now(), job_id),
+        (code, detail, utc_now_iso(), job_id),
     )
     conn.commit()
 

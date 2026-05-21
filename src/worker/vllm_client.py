@@ -60,8 +60,6 @@ class VLLMClient:
         with httpx.stream(
             "POST", url, json=payload, params=params, timeout=self.timeout
         ) as resp:
-            if resp.status_code >= 500:
-                raise RuntimeError(f"vLLM {resp.status_code}: {resp.read()[:500]}")
             if resp.status_code >= 400:
                 raise RuntimeError(f"vLLM {resp.status_code}: {resp.read()[:500]}")
             yield from parse_sse_lines(resp.iter_lines())

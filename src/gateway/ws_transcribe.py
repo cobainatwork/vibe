@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import shutil
 import uuid
 from pathlib import Path
 
@@ -17,12 +18,15 @@ from redis import Redis as SyncRedis
 
 from shared import error_codes
 from shared.auth import AuthError, verify_api_key
+from shared.db import TRANSCRIBE_QUEUE_NAME, TRANSCRIBE_QUEUE_REDIS_KEY
 from shared.repositories.job_repository import create_job, update_status
 from shared.validation import ValidationError, check_filename_ext
 
 from gateway.upload_writer import MaxSizeExceeded, UploadWriter
 
 log = logging.getLogger(__name__)
+
+_ACK_THRESHOLD_BYTES = 1024 * 1024  # 1 MB: send ack every time this much received
 
 router = APIRouter()
 
@@ -72,7 +76,7 @@ async def ws_transcribe(websocket: WebSocket):
     try:
         _depth_r = SyncRedis.from_url(cfg.redis_url, socket_connect_timeout=2)
         try:
-            queue_depth = _depth_r.llen("rq:queue:transcribe")
+            queue_depth = _depth_r.llen(TRANSCRIBE_QUEUE_REDIS_KEY)
             if queue_depth >= cfg.queue_max_depth:
                 await websocket.send_json({
                     "type": "error", "code": error_codes.QUEUE_FULL,
@@ -93,7 +97,6 @@ async def ws_transcribe(websocket: WebSocket):
     upload_target = cfg.upload_dir / job_id / "upload.bin"
     writer = UploadWriter(upload_target, max_bytes=cfg.max_file_size_mb * 1024 * 1024)
     last_ack_bytes = 0
-    ACK_THRESHOLD = 1024 * 1024  # 1MB
 
     try:
         while True:
@@ -109,7 +112,6 @@ async def ws_transcribe(websocket: WebSocket):
                            hotword_group_ids_csv=",".join(map(str, hotword_group_ids)),
                            output_format=output_format)
                 update_status(db, job_id, "aborted")
-                import shutil
                 shutil.rmtree(upload_target.parent, ignore_errors=True)
                 return
 
@@ -125,7 +127,7 @@ async def ws_transcribe(websocket: WebSocket):
                     writer.close()
                     await websocket.close()
                     return
-                if writer.total_bytes - last_ack_bytes >= ACK_THRESHOLD:
+                if writer.total_bytes - last_ack_bytes >= _ACK_THRESHOLD_BYTES:
                     last_ack_bytes = writer.total_bytes
                     await websocket.send_json({
                         "type": "ack", "bytes_received": writer.total_bytes,
@@ -168,7 +170,7 @@ async def ws_transcribe(websocket: WebSocket):
     try:
         enqueue_r = SyncRedis.from_url(cfg.redis_url, socket_connect_timeout=2)
         try:
-            queue = rq.Queue("transcribe", connection=enqueue_r)
+            queue = rq.Queue(TRANSCRIBE_QUEUE_NAME, connection=enqueue_r)
             queue.enqueue(
                 "worker.tasks.transcribe.transcribe_job",
                 job_id=job_id,
@@ -224,5 +226,5 @@ async def ws_transcribe(websocket: WebSocket):
 
     try:
         await websocket.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("close error (job %s): %s", job_id, exc)

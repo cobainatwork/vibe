@@ -5,8 +5,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from shared.repositories.hotword_repository import (
-    DuplicateNameError, GroupNotFoundError, create_group, delete_group,
-    get_group, list_groups, update_group,
+    DuplicateNameError, GroupNotFoundError, HotwordGroup, create_group,
+    delete_group, get_group, list_groups, update_group,
 )
 
 router = APIRouter()
@@ -22,7 +22,7 @@ class UpdateReq(BaseModel):
     words: list[str] | None = None
 
 
-def _serialize(g) -> dict:
+def _serialize(g: HotwordGroup) -> dict:
     return {
         "id": g.id, "name": g.name, "words": g.words,
         "created_at": g.created_at, "updated_at": g.updated_at,

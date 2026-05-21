@@ -4,8 +4,18 @@ We use raw sqlite3 (stdlib) to keep deps minimal.
 """
 from __future__ import annotations
 
+import datetime as dt
 import sqlite3
 from pathlib import Path
+
+
+def utc_now_iso() -> str:
+    """Current UTC time in ISO 8601 format."""
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+TRANSCRIBE_QUEUE_NAME = "transcribe"
+TRANSCRIBE_QUEUE_REDIS_KEY = f"rq:queue:{TRANSCRIBE_QUEUE_NAME}"
 
 SCHEMA_V1 = [
     """
