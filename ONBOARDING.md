@@ -7,7 +7,8 @@
 On-prem deployable VibeVoice ASR (speech-to-text) service. Customer side runs a 4-container docker-compose stack; our side will run a separate fine-tuning workbench (V-Trainer, not built yet).
 
 - **Upstream**: https://github.com/microsoft/VibeVoice (cloned at `vibevoice_src/`, gitignored)
-- **Our repo**: https://github.com/cobainatwork/vibe (private, `main` branch, 30 commits)
+- **Upstream pin**: `303b2833e01cff4578ec278bbfe536da54bd19fe` (main, 2026-05-21). `scripts/clone_upstream.sh` fetches `main` — if upstream drifts and breaks our integration, pin to this SHA via `UPSTREAM_REF=303b283... ./scripts/clone_upstream.sh`.
+- **Our repo**: https://github.com/cobainatwork/vibe (private, `main` branch)
 - **Working dir**: `/Users/cobain/project/vibe_asr`
 
 ## Architecture (V-Client, only thing built so far)
@@ -138,6 +139,21 @@ System (host):
 Python (in dev venv):
 - fastapi, uvicorn, websockets, rq, redis, httpx, pyyaml, python-multipart
 - pytest, pytest-asyncio, pytest-cov, testcontainers, ruff, bandit, mypy
+
+## Major architecture decisions (with rationale anchors)
+
+These were the load-bearing decisions made during brainstorming. Full reasoning in spec §11 取捨摘要; this is the index.
+
+| Decision | Why | Where to verify |
+|----------|-----|-----------------|
+| Two-version split (V-Client vs V-Trainer, no shared runtime) | Customer side doesn't need training; loose coupling via tar.gz handoff | spec §1, §4 |
+| SQLite over Postgres on customer side | Single-node, single writer (worker), Redis already has queue → Postgres overkill | spec §2.1, audit deferred |
+| vLLM uses file:// audio URLs (not base64) | Avoid nginx 200MB body limit; ~33% IO savings | spec §11; `vllm_plugin/scripts/start_server.py:179` (nginx config) |
+| LoRA merge-then-deploy (no hot-swap) | `vllm_plugin/model.py:929` doesn't implement `SupportsLoRA`. Mandatory architecture constraint, not a preference. | spec §11; upstream source |
+| Fork upstream `RepetitionDetector` rather than rewrite | Tuned thresholds (min_pattern_len=10, min_repeats=3, window_size=500); upstream owns the algorithm | spec §11; `vllm_plugin/tests/test_api_auto_recover.py:126-218` |
+| WS protocol for transcribe (not REST POST) | User requirement; one protocol handles offline upload + result push, REST kept as fallback for disconnect recovery | spec §5.2 |
+| No real-time streaming ASR | VibeVoice family has no streaming ASR model. Decided explicitly with user. | spec §0 範圍外 |
+| Hotwords via prompt-embedding (byte-perfect) | Server has no `--hotwords` flag; model was trained on the exact processor prompt string. Cannot improvise. | `vibevoice/processor/vibevoice_asr_processor.py:360-364` |
 
 ## Out of scope (decided NOT to do at V1)
 
