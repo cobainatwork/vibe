@@ -85,9 +85,8 @@ async def ws_transcribe(websocket: WebSocket):
                 return
         finally:
             _depth_r.close()
-    except Exception:
-        # Redis not reachable; proceed anyway (queue check best-effort)
-        pass
+    except Exception as exc:
+        log.debug("Redis queue-depth check failed (best-effort): %s", exc)
 
     await websocket.send_json({"type": "ready", "job_id": job_id})
 

@@ -1,7 +1,7 @@
 """Audio probing and video → audio extraction via ffmpeg/ffprobe."""
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
 
 from shared.validation import VIDEO_EXTS
@@ -18,7 +18,7 @@ def is_video_file(filename: str) -> bool:
 def probe_duration_sec(path: Path) -> float:
     """Return duration via ffprobe; raise DecodingError on failure."""
     try:
-        out = subprocess.check_output(
+        out = subprocess.check_output(  # nosec B603 B607 — fixed args, no shell, no user input
             [
                 "ffprobe", "-v", "error",
                 "-show_entries", "format=duration",
@@ -43,7 +43,7 @@ def extract_audio_from_video(src: Path, dst: Path) -> None:
     """Extract audio track to mp3."""
     dst.parent.mkdir(parents=True, exist_ok=True)
     try:
-        subprocess.run(
+        subprocess.run(  # nosec B603 B607 — fixed args, no shell, no user input
             [
                 "ffmpeg", "-y", "-i", str(src),
                 "-vn",                   # no video

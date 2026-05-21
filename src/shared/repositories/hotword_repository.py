@@ -77,7 +77,7 @@ def get_group_words(conn: sqlite3.Connection, group_ids: list[int]) -> list[str]
         return []
     placeholders = ",".join("?" * len(group_ids))
     rows = conn.execute(
-        f"SELECT words_csv FROM hotword_groups WHERE id IN ({placeholders})",
+        f"SELECT words_csv FROM hotword_groups WHERE id IN ({placeholders})",  # nosec B608 — placeholders are `?` literals only
         group_ids,
     ).fetchall()
     out: list[str] = []
