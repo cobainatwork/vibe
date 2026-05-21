@@ -120,6 +120,29 @@ vLLM container 內需掛載 microsoft/VibeVoice 的 Python 套件。執行：
 
 舊版保留最近 3 版，更舊的人工刪。
 
+## 排程 retention 清理
+
+預設 retention：
+- `uploads/{job_id}/` — 任務完成立刻刪（worker 內建）
+- `results/{job_id}/` — `RETAIN_RESULT_DAYS` 天（預設 30）後刪
+- `jobs` table rows — `RETAIN_JOB_RECORD_DAYS` 天（預設 90）後刪
+
+`results/` 與 `jobs` table 的清理**不會自動執行**——需排程 cron 每日呼叫：
+
+```bash
+# 加進 host crontab（不是 container 內）
+0 3 * * * cd /opt/vibevoice && docker compose exec -T gateway python /app/scripts/retention_cleanup.py >> /var/log/vibevoice-retention.log 2>&1
+```
+
+或用 systemd timer。腳本只用環境變數 + SQLite，沒有 GPU 依賴。
+
+驗證：
+
+```bash
+docker compose exec gateway python /app/scripts/retention_cleanup.py
+# 預期：{"event": "retention_cleanup", "deleted_result_dirs": N, "deleted_job_rows": M}
+```
+
 ## 故障排查
 
 | 症狀 | 排查 |

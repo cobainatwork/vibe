@@ -58,6 +58,7 @@ services:
       - ./data/results:/app/data/results
       - ./data/db:/app/data/db
       - ./config:/app/config:ro
+      - ./scripts:/app/scripts:ro
     env_file: .env
 
   worker:
