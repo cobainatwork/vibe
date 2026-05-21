@@ -39,9 +39,12 @@ def create_app() -> FastAPI:
     from gateway.rest_models import router as models_router
     from gateway.rest_hotwords import router as hotwords_router
     from gateway.rest_jobs import router as jobs_router
+    from gateway.ws_transcribe import router as ws_router
 
     app.include_router(health_router, prefix="/v1")
     app.include_router(models_router, prefix="/v1")
     app.include_router(hotwords_router, prefix="/v1")
     app.include_router(jobs_router, prefix="/v1")
+    # WS endpoint — auth is inline in handler (HTTP middleware does not apply)
+    app.include_router(ws_router, prefix="/v1")
     return app
