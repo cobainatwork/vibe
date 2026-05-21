@@ -60,4 +60,5 @@ def test_result_srt_content_type(client):
     # request srt
     r = c.get("/v1/jobs/js/result?format=srt", headers=HDR)
     assert r.status_code == 200
-    assert "text/" in r.headers["content-type"]
+    ct = r.headers["content-type"]
+    assert ct.startswith("application/x-subrip") or ct.startswith("text/")

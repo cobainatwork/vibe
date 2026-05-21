@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, Request
 
 router = APIRouter()
 
-VERSION_FILE = Path("/opt/vibevoice/current_model/version.json")
+VERSION_FILE = Path(os.environ.get(
+    "VIBEVOICE_VERSION_FILE",
+    "/opt/vibevoice/current_model/version.json",
+))
 
 
 @router.get("/models/current")

@@ -94,20 +94,35 @@ def list_groups(conn: sqlite3.Connection) -> list[HotwordGroup]:
 
 def update_group(conn: sqlite3.Connection, group_id: int, *,
                  name: str | None = None, words: list[str] | None = None) -> None:
-    existing = get_group(conn, group_id)
-    if not existing:
-        raise GroupNotFoundError(group_id)
-    new_name = name if name is not None else existing.name
-    new_words = words if words is not None else existing.words
+    if name is None and words is None:
+        existing = get_group(conn, group_id)
+        if existing is None:
+            raise GroupNotFoundError(group_id)
+        return  # nothing to update
+
+    fields = []
+    params: list = []
+    if name is not None:
+        fields.append("name=?")
+        params.append(name)
+    if words is not None:
+        fields.append("words_csv=?")
+        params.append(_serialize_words(words))
+    fields.append("updated_at=?")
+    params.append(utc_now_iso())
+    params.append(group_id)
+
     try:
-        conn.execute(
-            "UPDATE hotword_groups SET name=?, words_csv=?, updated_at=? WHERE id=?",
-            (new_name, _serialize_words(new_words), utc_now_iso(), group_id),
+        cur = conn.execute(
+            f"UPDATE hotword_groups SET {', '.join(fields)} WHERE id=?",  # nosec B608 — fields are string literals only
+            params,
         )
         conn.commit()
+        if cur.rowcount == 0:
+            raise GroupNotFoundError(group_id)
     except sqlite3.IntegrityError as e:
         if "UNIQUE constraint failed" in str(e):
-            raise DuplicateNameError(new_name) from e
+            raise DuplicateNameError(name) from e
         raise
 
 

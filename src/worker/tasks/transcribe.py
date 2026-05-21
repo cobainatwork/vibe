@@ -40,6 +40,11 @@ MAX_HOTWORDS = 200
 MAX_RETRIES = 3
 
 
+def _retry_temperature(retry: int) -> float:
+    """First attempt uses greedy decoding; retries add progressive randomness."""
+    return 0.0 if retry == 0 else 0.1 + 0.1 * retry
+
+
 def _publish(r: redis.Redis, channel: str, payload: dict) -> None:
     r.publish(channel, json.dumps(payload, ensure_ascii=False))
 
@@ -125,7 +130,7 @@ def transcribe_job(job_id: str, *, fake_scenario: str | None = None) -> None:
     extra_query = {"scenario": fake_scenario} if fake_scenario else None
 
     while retry <= MAX_RETRIES:
-        temperature = 0.0 if retry == 0 else 0.1 + 0.1 * retry  # 0.2/0.3/0.4
+        temperature = _retry_temperature(retry)
         try:
             iterator = client.stream_transcribe(
                 audio_path=str(audio_path),

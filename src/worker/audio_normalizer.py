@@ -11,7 +11,7 @@ class DecodingError(Exception):
     pass
 
 
-def is_video_file(filename: str) -> bool:
+def is_video_file(filename: str | Path) -> bool:
     return Path(filename).suffix.lower() in VIDEO_EXTS
 
 

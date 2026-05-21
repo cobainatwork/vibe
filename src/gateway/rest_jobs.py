@@ -10,6 +10,12 @@ from shared.repositories.job_repository import get_job
 
 router = APIRouter()
 
+_MEDIA_TYPES = {
+    "json": "application/json",
+    "srt": "application/x-subrip",
+    "vtt": "text/vtt",
+}
+
 
 @router.get("/jobs/{job_id}/result")
 async def get_result(
@@ -31,10 +37,9 @@ async def get_result(
 
     if format == "json":
         target = json_path
-        media = "application/json"
     else:
         target = base_dir / f"output.{format}"
-        media = "text/srt" if format == "srt" else "text/vtt"
+    media = _MEDIA_TYPES[format]
 
     if not target.exists():
         raise HTTPException(404, f"format {format} not available for job {job_id}")

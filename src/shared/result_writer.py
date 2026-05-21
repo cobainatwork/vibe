@@ -12,6 +12,7 @@ def format_timestamp_srt(seconds: float) -> str:
     mins = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
     millis = round((seconds - int(seconds)) * 1000)
+    # round() can produce 1000 when seconds is e.g. 1.9995 — carry into seconds
     if millis == 1000:
         secs += 1
         millis = 0

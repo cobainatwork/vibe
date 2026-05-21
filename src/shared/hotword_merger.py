@@ -4,12 +4,9 @@ Order preserved: first groups (in id order), then per-request additions.
 """
 from __future__ import annotations
 
+from shared.utils import parse_csv  # re-exported for backward compat
 
-def parse_csv(csv: str | None) -> list[str]:
-    if not csv:
-        return []
-    parts = (p.strip() for p in csv.split(","))
-    return [p for p in parts if p]
+__all__ = ["merge_hotwords", "parse_csv"]
 
 
 def merge_hotwords(
