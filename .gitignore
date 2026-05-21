@@ -21,3 +21,7 @@ vibevoice_src/
 *.swo
 .vscode/
 .idea/
+
+# Test audio fixtures (don't commit binary data)
+tests/fixtures/audio/*
+!tests/fixtures/audio/README.md
