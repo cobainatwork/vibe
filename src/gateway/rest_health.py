@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import logging
 import shutil
-from typing import cast
 
 import httpx
-import redis
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Request
 
 from shared.db import TRANSCRIBE_QUEUE_REDIS_KEY
@@ -30,8 +29,9 @@ async def health(request: Request):
     # Queue depth
     queue_depth = 0
     try:
-        redis_client = cast(redis.Redis, redis.from_url(cfg.redis_url))
-        queue_depth = cast(int, redis_client.llen(TRANSCRIBE_QUEUE_REDIS_KEY))
+        redis_client = aioredis.from_url(cfg.redis_url, socket_connect_timeout=2)
+        queue_depth = await redis_client.llen(TRANSCRIBE_QUEUE_REDIS_KEY)  # type: ignore[misc]
+        await redis_client.aclose()
     except Exception as exc:
         log.debug("Redis health check failed: %s", exc)
 

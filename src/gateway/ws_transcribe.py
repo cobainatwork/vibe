@@ -29,6 +29,18 @@ _ACK_THRESHOLD_BYTES = 1024 * 1024  # 1 MB: send ack every time this much receiv
 router = APIRouter()
 
 
+def _enqueue_sync(redis_url: str, job_id: str) -> None:
+    conn = SyncRedis.from_url(redis_url, socket_connect_timeout=2)
+    try:
+        rq.Queue(TRANSCRIBE_QUEUE_NAME, connection=conn).enqueue(
+            "worker.tasks.transcribe.transcribe_job",
+            job_id=job_id,
+            job_timeout=3600 * 2,
+        )
+    finally:
+        conn.close()
+
+
 @router.websocket("/transcribe")
 async def ws_transcribe(websocket: WebSocket):
     cfg = websocket.app.state.config
@@ -71,22 +83,23 @@ async def ws_transcribe(websocket: WebSocket):
         output_format = "json"
 
     # Check queue depth before going further (best-effort; failure is non-fatal)
+    depth_r = None
     try:
-        _depth_r = SyncRedis.from_url(cfg.redis_url, socket_connect_timeout=2)
-        try:
-            queue_depth = _depth_r.llen(TRANSCRIBE_QUEUE_REDIS_KEY)
-            if queue_depth >= cfg.queue_max_depth:
-                await websocket.send_json({
-                    "type": "error", "code": error_codes.QUEUE_FULL,
-                    "detail": "queue depth exceeded", "retry_after_sec": 60,
-                    "job_id": job_id,
-                })
-                await websocket.close()
-                return
-        finally:
-            _depth_r.close()
+        depth_r = aioredis.from_url(cfg.redis_url, socket_connect_timeout=2)
+        queue_depth = await depth_r.llen(TRANSCRIBE_QUEUE_REDIS_KEY)  # type: ignore[misc]
+        if queue_depth >= cfg.queue_max_depth:
+            await websocket.send_json({
+                "type": "error", "code": error_codes.QUEUE_FULL,
+                "detail": "queue depth exceeded", "retry_after_sec": 60,
+                "job_id": job_id,
+            })
+            await websocket.close()
+            return
     except Exception as exc:
         log.debug("Redis queue-depth check failed (best-effort): %s", exc)
+    finally:
+        if depth_r is not None:
+            await depth_r.aclose()
 
     await websocket.send_json({"type": "ready", "job_id": job_id})
 
@@ -165,20 +178,13 @@ async def ws_transcribe(websocket: WebSocket):
 
     # --- Enqueue first, then persist job row only on success ---
     try:
-        enqueue_r = SyncRedis.from_url(cfg.redis_url, socket_connect_timeout=2)
-        try:
-            queue = rq.Queue(TRANSCRIBE_QUEUE_NAME, connection=enqueue_r)
-            queue.enqueue(
-                "worker.tasks.transcribe.transcribe_job",
-                job_id=job_id,
-                job_timeout=3600 * 2,
-            )
-        finally:
-            enqueue_r.close()
+        await asyncio.get_event_loop().run_in_executor(
+            None, _enqueue_sync, cfg.redis_url, job_id
+        )
     except Exception as exc:
         log.warning("Failed to enqueue job %s: %s", job_id, exc)
         await websocket.send_json({
-            "type": "error", "code": "SERVICE_UNAVAILABLE",
+            "type": "error", "code": error_codes.SERVICE_UNAVAILABLE,
             "detail": "queue unavailable", "job_id": job_id,
         })
         await websocket.close()
