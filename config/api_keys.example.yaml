@@ -1,0 +1,5 @@
+- name: ops
+  key: change-me-to-a-long-random-string
+
+- name: internal-cron
+  key: change-me-too

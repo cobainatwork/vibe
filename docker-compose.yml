@@ -1,0 +1,80 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  vllm:
+    image: vllm/vllm-openai:v0.14.1
+    restart: unless-stopped
+    ipc: host
+    ports:
+      - "127.0.0.1:8001:8001"
+    entrypoint: bash
+    command: >
+      -c "python3 /app/vllm_plugin/scripts/start_server.py
+          --model /opt/vibevoice/current_model
+          --port 8001 --tp ${VLLM_TP:-1} --dp ${VLLM_DP:-1}"
+    volumes:
+      - ./vibevoice_src:/app
+      - ./current_model:/opt/vibevoice/current_model
+      - ./data/uploads:/app/uploads
+    environment:
+      - VIBEVOICE_FFMPEG_MAX_CONCURRENCY=64
+      - PYTORCH_ALLOC_CONF=expandable_segments:True
+      - VIBEVOICE_MAX_AUDIO_DURATION=3660
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8001/v1/models || exit 1"]
+      interval: 10s
+      retries: 60
+      start_period: 5m
+
+  gateway:
+    image: vibevoice-app:${APP_TAG:-0.1.0}
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    restart: unless-stopped
+    command: uvicorn gateway.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      vllm:
+        condition: service_healthy
+    volumes:
+      - ./data/uploads:/app/data/uploads
+      - ./data/results:/app/data/results
+      - ./data/db:/app/data/db
+      - ./config:/app/config:ro
+    env_file: .env
+
+  worker:
+    image: vibevoice-app:${APP_TAG:-0.1.0}
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    restart: unless-stopped
+    command: python -m worker.main
+    depends_on:
+      redis:
+        condition: service_healthy
+      vllm:
+        condition: service_healthy
+    volumes:
+      - ./data/uploads:/app/data/uploads
+      - ./data/results:/app/data/results
+      - ./data/db:/app/data/db
+      - ./config:/app/config:ro
+    env_file: .env
