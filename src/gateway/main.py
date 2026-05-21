@@ -38,8 +38,10 @@ def create_app() -> FastAPI:
     from gateway.rest_health import router as health_router
     from gateway.rest_models import router as models_router
     from gateway.rest_hotwords import router as hotwords_router
+    from gateway.rest_jobs import router as jobs_router
 
     app.include_router(health_router, prefix="/v1")
     app.include_router(models_router, prefix="/v1")
     app.include_router(hotwords_router, prefix="/v1")
+    app.include_router(jobs_router, prefix="/v1")
     return app
