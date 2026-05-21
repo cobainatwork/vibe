@@ -1,11 +1,12 @@
 import json
 
-import pytest
-
 from shared.result_writer import (
-    write_json, write_srt, write_vtt, format_timestamp_srt, format_timestamp_vtt,
+    format_timestamp_srt,
+    format_timestamp_vtt,
+    write_json,
+    write_srt,
+    write_vtt,
 )
-
 
 SEGMENTS = [
     {"start_time": 0.0, "end_time": 2.5, "speaker_id": 0, "text": "你好"},

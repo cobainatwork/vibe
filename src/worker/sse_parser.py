@@ -8,8 +8,8 @@ vLLM's OpenAI-compatible /v1/chat/completions returns:
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from typing import Iterable, Iterator
 
 
 @dataclass

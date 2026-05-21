@@ -1,4 +1,4 @@
-from shared.prompt_builder import build_user_prompt, SYSTEM_PROMPT
+from shared.prompt_builder import SYSTEM_PROMPT, build_user_prompt
 
 
 def test_system_prompt_constant_matches_upstream():

@@ -3,7 +3,6 @@
 Trigger: pytest -m e2e
 Requires: docker compose up -d with everything healthy.
 """
-import asyncio
 import json
 import os
 from pathlib import Path
@@ -41,7 +40,6 @@ async def test_ws_transcribe_zh_tw():
         await ws.send(json.dumps({"type": "start", "filename": FIXTURE.name}))
         ready = json.loads(await ws.recv())
         assert ready["type"] == "ready"
-        job_id = ready["job_id"]
 
         await ws.send(audio)
         await ws.send(json.dumps({"type": "eof"}))

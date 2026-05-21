@@ -28,7 +28,6 @@ def _to_sse_lines(chunks: list[str]):
 
 @app.post("/v1/chat/completions")
 async def completions(req: Request):
-    body = await req.json()
     # Extract scenario from prompt text hint (we encode scenario in user text for tests)
     scenario = req.query_params.get("scenario", "happy")
     if scenario == "error_5xx":

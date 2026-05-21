@@ -1,7 +1,6 @@
 """GET /v1/models/current."""
 from __future__ import annotations
 
-import datetime as dt
 import json
 from pathlib import Path
 

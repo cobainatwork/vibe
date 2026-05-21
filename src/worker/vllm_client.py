@@ -4,7 +4,7 @@ Uses file:// audio URL (avoids base64 / 200MB nginx limit).
 """
 from __future__ import annotations
 
-from typing import Iterator
+from collections.abc import Iterator
 
 import httpx
 
@@ -20,7 +20,8 @@ class VLLMClient:
     def stream_transcribe(
         self,
         *,
-        audio_path: str,                    # path INSIDE vllm container, e.g. /app/uploads/{id}/audio.mp3
+        # path INSIDE vllm container, e.g. /app/uploads/{id}/audio.mp3
+        audio_path: str,
         duration_sec: float,
         hotwords_csv: str,
         extra_query: dict[str, str] | None = None,

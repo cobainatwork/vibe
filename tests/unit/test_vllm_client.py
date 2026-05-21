@@ -1,7 +1,8 @@
-import pytest
-import uvicorn
 import threading
 import time
+
+import pytest
+import uvicorn
 
 from worker.vllm_client import VLLMClient
 

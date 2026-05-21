@@ -1,8 +1,12 @@
 import pytest
 
 from shared.validation import (
-    ValidationError, check_filename_ext, check_file_size_mb,
-    check_audio_duration_sec, AUDIO_EXTS, VIDEO_EXTS,
+    AUDIO_EXTS,
+    VIDEO_EXTS,
+    ValidationError,
+    check_audio_duration_sec,
+    check_file_size_mb,
+    check_filename_ext,
 )
 
 

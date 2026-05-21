@@ -5,8 +5,14 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from shared.repositories.hotword_repository import (
-    DuplicateNameError, GroupNotFoundError, HotwordGroup, create_group,
-    delete_group, get_group, list_groups, update_group,
+    DuplicateNameError,
+    GroupNotFoundError,
+    HotwordGroup,
+    create_group,
+    delete_group,
+    get_group,
+    list_groups,
+    update_group,
 )
 
 router = APIRouter()
@@ -41,9 +47,9 @@ async def create_route(req: CreateReq, request: Request):
     try:
         gid = create_group(conn, name=req.name, words=req.words)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
     except DuplicateNameError:
-        raise HTTPException(409, f"name '{req.name}' already exists")
+        raise HTTPException(409, f"name '{req.name}' already exists") from None
     g = get_group(conn, gid)
     return _serialize(g)
 
@@ -54,11 +60,11 @@ async def update_route(group_id: int, req: UpdateReq, request: Request):
     try:
         update_group(conn, group_id, name=req.name, words=req.words)
     except GroupNotFoundError:
-        raise HTTPException(404, f"group {group_id} not found")
+        raise HTTPException(404, f"group {group_id} not found") from None
     except DuplicateNameError:
-        raise HTTPException(409, "name conflict")
+        raise HTTPException(409, "name conflict") from None
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
     g = get_group(conn, group_id)
     return _serialize(g)
 
@@ -69,4 +75,4 @@ async def delete_route(group_id: int, request: Request):
     try:
         delete_group(conn, group_id)
     except GroupNotFoundError:
-        raise HTTPException(404, f"group {group_id} not found")
+        raise HTTPException(404, f"group {group_id} not found") from None

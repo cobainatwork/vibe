@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import logging
 import shutil
-from pathlib import Path
 
 import redis
 
@@ -14,18 +13,25 @@ from shared.db import connect
 from shared.hotword_merger import merge_hotwords, parse_csv
 from shared.repositories.hotword_repository import get_group_words
 from shared.repositories.job_repository import (
-    get_job, set_audio_duration, set_error, set_result_path, update_status,
+    get_job,
+    set_audio_duration,
+    set_error,
+    set_result_path,
+    update_status,
 )
 from shared.result_writer import write_json, write_srt, write_vtt
 from shared.validation import (
-    ValidationError, check_audio_duration_sec, check_filename_ext,
+    ValidationError,
+    check_audio_duration_sec,
+    check_filename_ext,
 )
 from worker.audio_normalizer import (
-    DecodingError, extract_audio_from_video, is_video_file, probe_duration_sec,
+    DecodingError,
+    extract_audio_from_video,
+    probe_duration_sec,
 )
 from worker.output_parser import parse_transcription
 from worker.repetition_detector import RepetitionDetector
-from worker.sse_parser import SSEEvent
 from worker.vllm_client import VLLMClient
 
 log = logging.getLogger(__name__)

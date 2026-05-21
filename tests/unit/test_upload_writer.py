@@ -1,6 +1,6 @@
 import pytest
 
-from gateway.upload_writer import UploadWriter, MaxSizeExceeded
+from gateway.upload_writer import MaxSizeExceeded, UploadWriter
 
 
 def test_writes_chunks(tmp_path):

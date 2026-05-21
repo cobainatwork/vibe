@@ -4,8 +4,10 @@ from pathlib import Path
 import pytest
 
 from worker.audio_normalizer import (
-    probe_duration_sec, extract_audio_from_video,
-    is_video_file, DecodingError,
+    DecodingError,
+    extract_audio_from_video,
+    is_video_file,
+    probe_duration_sec,
 )
 
 

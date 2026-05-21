@@ -1,4 +1,4 @@
-from worker.sse_parser import parse_sse_lines, SSEEvent
+from worker.sse_parser import parse_sse_lines
 
 
 def test_basic_content_event():

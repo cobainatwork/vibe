@@ -9,20 +9,18 @@ import json
 import logging
 import shutil
 import uuid
-from pathlib import Path
 
 import redis.asyncio as aioredis
 import rq
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from redis import Redis as SyncRedis
 
+from gateway.upload_writer import MaxSizeExceeded, UploadWriter
 from shared import error_codes
 from shared.auth import AuthError, verify_api_key
 from shared.db import TRANSCRIBE_QUEUE_NAME, TRANSCRIBE_QUEUE_REDIS_KEY
 from shared.repositories.job_repository import create_job, update_status
 from shared.validation import ValidationError, check_filename_ext
-
-from gateway.upload_writer import MaxSizeExceeded, UploadWriter
 
 log = logging.getLogger(__name__)
 

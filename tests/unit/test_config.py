@@ -1,8 +1,7 @@
-import os
 import pytest
 import yaml
 
-from shared.config import Config, load_config
+from shared.config import load_config
 
 
 def test_load_config_from_env(monkeypatch, tmp_path):

@@ -1,4 +1,3 @@
-import sqlite3
 
 from shared.db import connect, run_migrations
 

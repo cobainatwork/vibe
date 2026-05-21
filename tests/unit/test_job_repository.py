@@ -4,8 +4,11 @@ import pytest
 
 from shared.db import connect, run_migrations
 from shared.repositories.job_repository import (
-    Job, create_job, update_status, set_audio_duration,
-    set_result_path, set_error, get_job, list_finished_before,
+    create_job,
+    get_job,
+    list_finished_before,
+    set_error,
+    update_status,
 )
 
 

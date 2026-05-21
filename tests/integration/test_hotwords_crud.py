@@ -20,7 +20,11 @@ HDR = {"X-API-Key": "t-key"}
 
 def test_crud_full_cycle(client):
     # Create
-    r = client.post("/v1/hotword-groups", json={"name": "medical", "words": ["MRI", "CT"]}, headers=HDR)
+    r = client.post(
+        "/v1/hotword-groups",
+        json={"name": "medical", "words": ["MRI", "CT"]},
+        headers=HDR,
+    )
     assert r.status_code == 201
     gid = r.json()["id"]
 

@@ -2,8 +2,14 @@ import pytest
 
 from shared.db import connect, run_migrations
 from shared.repositories.hotword_repository import (
-    create_group, get_group, get_group_words, list_groups,
-    update_group, delete_group, DuplicateNameError, GroupNotFoundError,
+    DuplicateNameError,
+    GroupNotFoundError,
+    create_group,
+    delete_group,
+    get_group,
+    get_group_words,
+    list_groups,
+    update_group,
 )
 
 

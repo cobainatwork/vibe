@@ -24,7 +24,7 @@ class HotwordGroup:
     updated_at: str
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "HotwordGroup":
+    def from_row(cls, row: sqlite3.Row) -> HotwordGroup:
         return cls(
             id=row["id"], name=row["name"],
             words=_deserialize_words(row["words_csv"]),
@@ -50,7 +50,9 @@ def create_group(conn: sqlite3.Connection, *, name: str, words: list[str]) -> in
     now = utc_now_iso()
     try:
         cur = conn.execute(
-            "INSERT INTO hotword_groups (name, words_csv, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO hotword_groups "
+            "(name, words_csv, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?)",
             (name, words_csv, now, now),
         )
         conn.commit()

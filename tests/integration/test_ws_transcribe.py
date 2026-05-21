@@ -1,11 +1,7 @@
-import asyncio
-import json
-import os
-import subprocess
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 
 @pytest.fixture
@@ -34,7 +30,7 @@ def test_ws_handshake_then_ready(client):
 
 
 def test_ws_invalid_auth_rejected(client):
-    with pytest.raises(Exception):
+    with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect("/v1/transcribe") as ws:
             ws.send_json({"type": "start"})
             ws.receive_json()

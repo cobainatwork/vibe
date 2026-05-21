@@ -4,15 +4,14 @@ from __future__ import annotations
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from shared.auth import AuthError, verify_api_key
-from shared.config import Config, load_config
-from shared.db import connect, run_migrations
-
 from gateway.rest_health import router as health_router
 from gateway.rest_hotwords import router as hotwords_router
 from gateway.rest_jobs import router as jobs_router
 from gateway.rest_models import router as models_router
 from gateway.ws_transcribe import router as ws_router
+from shared.auth import AuthError, verify_api_key
+from shared.config import load_config
+from shared.db import connect, run_migrations
 
 
 def create_app() -> FastAPI:
