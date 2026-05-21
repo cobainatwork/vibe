@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+.venv/
+.env
+config/api_keys.yaml
+data/
+current_model/*
+!current_model/.gitkeep
+vibevoice_src/
+.cache/
