@@ -68,21 +68,24 @@ async def ws_transcribe(websocket: WebSocket):
     if output_format not in {"json", "srt", "vtt"}:
         output_format = "json"
 
-    # Check queue depth before going further
+    # Check queue depth before going further (best-effort; failure is non-fatal)
     try:
-        sync_r = SyncRedis.from_url(cfg.redis_url)
-        queue_depth = sync_r.llen("rq:queue:transcribe")
-        if queue_depth >= cfg.queue_max_depth:
-            await websocket.send_json({
-                "type": "error", "code": error_codes.QUEUE_FULL,
-                "detail": "queue depth exceeded", "retry_after_sec": 60,
-                "job_id": job_id,
-            })
-            await websocket.close()
-            return
+        _depth_r = SyncRedis.from_url(cfg.redis_url, socket_connect_timeout=2)
+        try:
+            queue_depth = _depth_r.llen("rq:queue:transcribe")
+            if queue_depth >= cfg.queue_max_depth:
+                await websocket.send_json({
+                    "type": "error", "code": error_codes.QUEUE_FULL,
+                    "detail": "queue depth exceeded", "retry_after_sec": 60,
+                    "job_id": job_id,
+                })
+                await websocket.close()
+                return
+        finally:
+            _depth_r.close()
     except Exception:
         # Redis not reachable; proceed anyway (queue check best-effort)
-        sync_r = None
+        pass
 
     await websocket.send_json({"type": "ready", "job_id": job_id})
 
@@ -161,24 +164,33 @@ async def ws_transcribe(websocket: WebSocket):
         await websocket.close()
         return
 
-    # --- Persist job + enqueue ---
+    # --- Enqueue first, then persist job row only on success ---
+    try:
+        enqueue_r = SyncRedis.from_url(cfg.redis_url, socket_connect_timeout=2)
+        try:
+            queue = rq.Queue("transcribe", connection=enqueue_r)
+            queue.enqueue(
+                "worker.tasks.transcribe.transcribe_job",
+                job_id=job_id,
+                job_timeout=3600 * 2,
+            )
+        finally:
+            enqueue_r.close()
+    except Exception as exc:
+        log.warning("Failed to enqueue job %s: %s", job_id, exc)
+        await websocket.send_json({
+            "type": "error", "code": "SERVICE_UNAVAILABLE",
+            "detail": "queue unavailable", "job_id": job_id,
+        })
+        await websocket.close()
+        return
+
     create_job(
         db, job_id=job_id, filename=filename,
         hotwords_csv=hotwords_csv,
         hotword_group_ids_csv=",".join(map(str, hotword_group_ids)),
         output_format=output_format,
     )
-
-    if sync_r is not None:
-        try:
-            queue = rq.Queue("transcribe", connection=sync_r)
-            queue.enqueue(
-                "worker.tasks.transcribe.transcribe_job",
-                job_id=job_id,
-                job_timeout=3600 * 2,
-            )
-        except Exception as exc:
-            log.warning("Failed to enqueue job %s: %s", job_id, exc)
 
     # --- State 3: subscribe to pubsub events and forward to client ---
     try:
