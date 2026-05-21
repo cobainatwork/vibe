@@ -62,5 +62,6 @@ class VLLMClient:
             "POST", url, json=payload, params=params, timeout=self.timeout
         ) as resp:
             if resp.status_code >= 400:
-                raise RuntimeError(f"vLLM {resp.status_code}: {resp.read()[:500]}")
+                body = resp.read()[:500].decode("utf-8", errors="replace")
+                raise RuntimeError(f"vLLM {resp.status_code}: {body}")
             yield from parse_sse_lines(resp.iter_lines())

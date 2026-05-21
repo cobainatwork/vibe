@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+from typing import cast
 
 import httpx
 import redis
@@ -29,8 +30,8 @@ async def health(request: Request):
     # Queue depth
     queue_depth = 0
     try:
-        r = redis.from_url(cfg.redis_url)
-        queue_depth = r.llen(TRANSCRIBE_QUEUE_REDIS_KEY)
+        redis_client = cast(redis.Redis, redis.from_url(cfg.redis_url))
+        queue_depth = cast(int, redis_client.llen(TRANSCRIBE_QUEUE_REDIS_KEY))
     except Exception as exc:
         log.debug("Redis health check failed: %s", exc)
 

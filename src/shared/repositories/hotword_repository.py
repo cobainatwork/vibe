@@ -56,6 +56,7 @@ def create_group(conn: sqlite3.Connection, *, name: str, words: list[str]) -> in
             (name, words_csv, now, now),
         )
         conn.commit()
+        assert cur.lastrowid is not None
         return cur.lastrowid
     except sqlite3.IntegrityError as e:
         if "UNIQUE constraint failed" in str(e):

@@ -51,6 +51,7 @@ async def create_route(req: CreateReq, request: Request):
     except DuplicateNameError:
         raise HTTPException(409, f"name '{req.name}' already exists") from None
     g = get_group(conn, gid)
+    assert g is not None
     return _serialize(g)
 
 
@@ -66,6 +67,7 @@ async def update_route(group_id: int, req: UpdateReq, request: Request):
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     g = get_group(conn, group_id)
+    assert g is not None
     return _serialize(g)
 
 
