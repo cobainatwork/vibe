@@ -41,6 +41,145 @@ def _enqueue_sync(redis_url: str, job_id: str) -> None:
         conn.close()
 
 
+async def _receive_start_frame(websocket: WebSocket, idle_timeout_sec: float) -> dict | None:
+    """Wait for the 'start' frame after handshake.
+
+    Returns parsed dict or None on error (caller closes).
+    """
+    job_id = websocket.scope.get("_job_id", "")
+    try:
+        start_msg = await asyncio.wait_for(
+            websocket.receive_json(),
+            timeout=idle_timeout_sec,
+        )
+    except (asyncio.TimeoutError, WebSocketDisconnect):
+        await websocket.close(code=1001)
+        return None
+
+    if start_msg.get("type") != "start":
+        await websocket.send_json({
+            "type": "error", "code": error_codes.INTERNAL,
+            "detail": "expected start frame", "job_id": job_id,
+        })
+        await websocket.close()
+        return None
+
+    return start_msg
+
+
+async def _receive_upload(
+    websocket: WebSocket,
+    writer: UploadWriter,
+    idle_timeout_sec: float,
+    max_file_size_mb: int,
+    job_id: str,
+    # DB params needed only on disconnect to mark aborted
+    db,
+    filename: str,
+    hotwords_csv: str,
+    hotword_group_ids_csv: str,
+    output_format: str,
+    upload_target,
+) -> bool:
+    """Receive binary chunks + emit ACK every 1MB.
+
+    Returns True on 'eof', False on disconnect/timeout/size-exceeded.
+    Caller handles cleanup of writer + sending error frames.
+    """
+    last_ack_bytes = 0
+    try:
+        while True:
+            msg = await asyncio.wait_for(
+                websocket.receive(),
+                timeout=idle_timeout_sec,
+            )
+            if msg.get("type") == "websocket.disconnect":
+                writer.close()
+                create_job(db, job_id=job_id, filename=filename,
+                           hotwords_csv=hotwords_csv,
+                           hotword_group_ids_csv=hotword_group_ids_csv,
+                           output_format=output_format)
+                update_status(db, job_id, "aborted")
+                shutil.rmtree(upload_target.parent, ignore_errors=True)
+                return False
+
+            if "bytes" in msg and msg["bytes"]:
+                try:
+                    writer.write(msg["bytes"])
+                except MaxSizeExceeded:
+                    await websocket.send_json({
+                        "type": "error", "code": error_codes.FILE_TOO_LARGE,
+                        "detail": f"max {max_file_size_mb}MB",
+                        "job_id": job_id,
+                    })
+                    writer.close()
+                    await websocket.close()
+                    return False
+                if writer.total_bytes - last_ack_bytes >= _ACK_THRESHOLD_BYTES:
+                    last_ack_bytes = writer.total_bytes
+                    await websocket.send_json({
+                        "type": "ack", "bytes_received": writer.total_bytes,
+                    })
+                continue
+
+            if "text" in msg:
+                try:
+                    obj = json.loads(msg["text"])
+                except json.JSONDecodeError:
+                    continue
+                if obj.get("type") == "eof":
+                    return True
+    except asyncio.TimeoutError:
+        await websocket.send_json({
+            "type": "error", "code": error_codes.INTERNAL,
+            "detail": "idle timeout", "job_id": job_id,
+        })
+        writer.close()
+        await websocket.close()
+        return False
+    except WebSocketDisconnect:
+        writer.close()
+        return False
+
+
+async def _enqueue_job(redis_url: str, job_id: str) -> None:
+    """Enqueue the transcribe job via run_in_executor. Wraps _enqueue_sync. Raises on failure."""
+    await asyncio.get_event_loop().run_in_executor(None, _enqueue_sync, redis_url, job_id)
+
+
+async def _forward_events(websocket: WebSocket, redis_url: str, job_id: str) -> None:
+    """Subscribe to job:{job_id}:events pubsub channel.
+
+    Forward messages to WS until done/error/disconnect.
+    """
+    try:
+        pubsub_r = aioredis.from_url(redis_url)
+        pubsub = pubsub_r.pubsub()
+        channel = f"job:{job_id}:events"
+        await pubsub.subscribe(channel)
+        try:
+            async for raw in pubsub.listen():
+                if raw.get("type") != "message":
+                    continue
+                payload = raw["data"]
+                if isinstance(payload, bytes):
+                    payload = payload.decode("utf-8")
+                try:
+                    event = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                await websocket.send_json(event)
+                if event.get("type") in ("done", "error"):
+                    break
+        except WebSocketDisconnect:
+            pass
+        finally:
+            await pubsub.unsubscribe(channel)
+            await pubsub.aclose()
+    except Exception as exc:
+        log.warning("Pubsub setup failed for job %s: %s", job_id, exc)
+
+
 @router.websocket("/transcribe")
 async def ws_transcribe(websocket: WebSocket):
     cfg = websocket.app.state.config
@@ -54,31 +193,17 @@ async def ws_transcribe(websocket: WebSocket):
         return
 
     await websocket.accept()
-
     job_id = uuid.uuid4().hex[:12]
+    websocket.scope["_job_id"] = job_id
 
-    # --- State 1: receive 'start' frame ---
-    try:
-        start_msg = await asyncio.wait_for(
-            websocket.receive_json(),
-            timeout=cfg.ws_idle_timeout_sec,
-        )
-    except (asyncio.TimeoutError, WebSocketDisconnect):
-        await websocket.close(code=1001)
+    start = await _receive_start_frame(websocket, cfg.ws_idle_timeout_sec)
+    if start is None:
         return
 
-    if start_msg.get("type") != "start":
-        await websocket.send_json({
-            "type": "error", "code": error_codes.INTERNAL,
-            "detail": "expected start frame", "job_id": job_id,
-        })
-        await websocket.close()
-        return
-
-    filename = start_msg.get("filename", "upload.bin")
-    hotwords_csv = start_msg.get("hotwords") or ""
-    hotword_group_ids = start_msg.get("hotword_group_ids") or []
-    output_format = start_msg.get("output_format", "json")
+    filename = start.get("filename", "upload.bin")
+    hotwords_csv = start.get("hotwords") or ""
+    hotword_group_ids = start.get("hotword_group_ids") or []
+    output_format = start.get("output_format", "json")
     if output_format not in {"json", "srt", "vtt"}:
         output_format = "json"
 
@@ -103,69 +228,21 @@ async def ws_transcribe(websocket: WebSocket):
 
     await websocket.send_json({"type": "ready", "job_id": job_id})
 
-    # --- State 2: receive binary chunks + eof ---
     upload_target = cfg.upload_dir / job_id / "upload.bin"
     writer = UploadWriter(upload_target, max_bytes=cfg.max_file_size_mb * 1024 * 1024)
-    last_ack_bytes = 0
+    hotword_group_ids_csv = ",".join(map(str, hotword_group_ids))
 
-    try:
-        while True:
-            msg = await asyncio.wait_for(
-                websocket.receive(),
-                timeout=cfg.ws_idle_timeout_sec,
-            )
-            if msg.get("type") == "websocket.disconnect":
-                writer.close()
-                # Mark aborted in DB
-                create_job(db, job_id=job_id, filename=filename,
-                           hotwords_csv=hotwords_csv,
-                           hotword_group_ids_csv=",".join(map(str, hotword_group_ids)),
-                           output_format=output_format)
-                update_status(db, job_id, "aborted")
-                shutil.rmtree(upload_target.parent, ignore_errors=True)
-                return
-
-            if "bytes" in msg and msg["bytes"]:
-                try:
-                    writer.write(msg["bytes"])
-                except MaxSizeExceeded:
-                    await websocket.send_json({
-                        "type": "error", "code": error_codes.FILE_TOO_LARGE,
-                        "detail": f"max {cfg.max_file_size_mb}MB",
-                        "job_id": job_id,
-                    })
-                    writer.close()
-                    await websocket.close()
-                    return
-                if writer.total_bytes - last_ack_bytes >= _ACK_THRESHOLD_BYTES:
-                    last_ack_bytes = writer.total_bytes
-                    await websocket.send_json({
-                        "type": "ack", "bytes_received": writer.total_bytes,
-                    })
-                continue
-
-            if "text" in msg:
-                try:
-                    obj = json.loads(msg["text"])
-                except json.JSONDecodeError:
-                    continue
-                if obj.get("type") == "eof":
-                    break
-    except asyncio.TimeoutError:
-        await websocket.send_json({
-            "type": "error", "code": error_codes.INTERNAL,
-            "detail": "idle timeout", "job_id": job_id,
-        })
-        writer.close()
-        await websocket.close()
-        return
-    except WebSocketDisconnect:
-        writer.close()
+    eof_ok = await _receive_upload(
+        websocket, writer, cfg.ws_idle_timeout_sec,
+        cfg.max_file_size_mb, job_id,
+        db, filename, hotwords_csv, hotword_group_ids_csv, output_format,
+        upload_target,
+    )
+    if not eof_ok:
         return
 
     writer.close()
 
-    # --- Filename validation (extension check) ---
     try:
         check_filename_ext(filename)
     except ValidationError as ve:
@@ -176,11 +253,8 @@ async def ws_transcribe(websocket: WebSocket):
         await websocket.close()
         return
 
-    # --- Enqueue first, then persist job row only on success ---
     try:
-        await asyncio.get_event_loop().run_in_executor(
-            None, _enqueue_sync, cfg.redis_url, job_id
-        )
+        await _enqueue_job(cfg.redis_url, job_id)
     except Exception as exc:
         log.warning("Failed to enqueue job %s: %s", job_id, exc)
         await websocket.send_json({
@@ -193,39 +267,11 @@ async def ws_transcribe(websocket: WebSocket):
     create_job(
         db, job_id=job_id, filename=filename,
         hotwords_csv=hotwords_csv,
-        hotword_group_ids_csv=",".join(map(str, hotword_group_ids)),
+        hotword_group_ids_csv=hotword_group_ids_csv,
         output_format=output_format,
     )
 
-    # --- State 3: subscribe to pubsub events and forward to client ---
-    try:
-        pubsub_r = aioredis.from_url(cfg.redis_url)
-        pubsub = pubsub_r.pubsub()
-        channel = f"job:{job_id}:events"
-        await pubsub.subscribe(channel)
-
-        try:
-            async for raw in pubsub.listen():
-                if raw.get("type") != "message":
-                    continue
-                payload = raw["data"]
-                if isinstance(payload, bytes):
-                    payload = payload.decode("utf-8")
-                try:
-                    event = json.loads(payload)
-                except json.JSONDecodeError:
-                    continue
-                await websocket.send_json(event)
-                if event.get("type") in ("done", "error"):
-                    break
-        except WebSocketDisconnect:
-            # Client gone; worker keeps going, result available via REST
-            pass
-        finally:
-            await pubsub.unsubscribe(channel)
-            await pubsub.aclose()
-    except Exception as exc:
-        log.warning("Pubsub setup failed for job %s: %s", job_id, exc)
+    await _forward_events(websocket, cfg.redis_url, job_id)
 
     try:
         await websocket.close()
